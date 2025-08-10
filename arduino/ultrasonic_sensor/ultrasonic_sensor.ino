@@ -20,8 +20,12 @@ const float maxUsefulHeight = tankHeight - minWaterDepth;
 const float volumePerCmCube = 3.14159 * tankRadius * tankRadius;
 
 // --- Outlier filter parameters ---
-const int numOutlierReadings = 5;
+const int numOutlierReadings = 90;
 int outlierReadings[numOutlierReadings];
+
+// --- Timing variables for precise one-second loop ---
+unsigned long previousMillis = 0;
+const long interval = 1000;  // 1000ms interval = 1 second
 
 // --- Auxiliary Functions ---
 
@@ -49,7 +53,7 @@ int getStableDistance() {
     duration = pulseIn(echoPin, HIGH);
 
     outlierReadings[i] = duration * 0.0343 / 2;
-    delay(5);
+    delay(10);
   }
 
   sort(outlierReadings, numOutlierReadings);
@@ -112,29 +116,34 @@ void setup() {
 }
 
 void loop() {
-  // 1. Get a stabilized raw measurement (outlier filter)
-  int stableMeasurement = getStableDistance();
+  unsigned long currentMillis = millis();
 
-  // 2. Smooth the measurement with a moving average
-  int average = getMovingAverage(stableMeasurement);
+  // Check if 1000ms have passed since the last execution
+  if (currentMillis - previousMillis >= interval) {
+    // Update the timer for the next loop
+    previousMillis = currentMillis;    
+    // 1. Get a stabilized raw measurement (outlier filter)
+    int stableMeasurement = getStableDistance();
 
-  // 3. Perform all tank-related calculations
-  TankData tankData = calculateTankData(average);
+    // 2. Smooth the measurement with a moving average
+    int average = getMovingAverage(stableMeasurement);
 
-  // 4. Send the results to the serial port in a structured CSV format
-  Serial.print("Niveau utile: ");
-  Serial.print(tankData.usefulLevel);
-  Serial.print(" cm, ");
+    // 3. Perform all tank-related calculations
+    TankData tankData = calculateTankData(average);
 
-  Serial.print("Volume: ");
-  Serial.print(tankData.volumeLiters);
-  Serial.print(" L, ");
+    // 4. Send the results to the serial port in a structured CSV format
+    Serial.print("Niveau utile: ");
+    Serial.print(tankData.usefulLevel);
+    Serial.print(" cm, ");
 
-  Serial.print("Pourcentage: ");
-  Serial.print(tankData.usefulPercentage);
-  Serial.print(" %");
+    Serial.print("Volume: ");
+    Serial.print(tankData.volumeLiters);
+    Serial.print(" L, ");
 
-  Serial.println(); // Add a new line at the end
+    Serial.print("Pourcentage: ");
+    Serial.print(tankData.usefulPercentage);
+    Serial.print(" %");
 
-  delay(100);
+    Serial.println(); // Add a new line at the end
+  }
 }
