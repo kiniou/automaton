@@ -1,3 +1,5 @@
+#include <ArduinoJson.h>
+
 // Sensor pin definitions
 const int trigPin = 13;
 const int echoPin = 12;
@@ -5,7 +7,7 @@ const int echoPin = 12;
 // Global variables
 long duration;
 
-// --- Structure to group tank data ---
+// --- Structure to group tank data (simplified) ---
 struct TankData {
   float usefulLevel;
   float volumeLiters;
@@ -20,21 +22,26 @@ const float maxUsefulHeight = tankHeight - minWaterDepth;
 const float volumePerCmCube = 3.14159 * tankRadius * tankRadius;
 
 // --- Outlier filter parameters ---
-const int numOutlierReadings = 90;
-int outlierReadings[numOutlierReadings];
+const int numOutlierReadings = 30;
+const int numToTrim = 5;
+float outlierReadings[numOutlierReadings];
+
+// --- Moving average variables ---
+const int numReadings = 10;
+float readings[numReadings];
+int readingIndex = 0;
+float total = 0.0;
 
 // --- Timing variables for precise one-second loop ---
 unsigned long previousMillis = 0;
-const long interval = 1000;  // 1000ms interval = 1 second
+const long interval = 1000;
 
 // --- Auxiliary Functions ---
-
-// Function to sort an array of integers
-void sort(int a[], int size) {
+void sort(float a[], int size) {
   for (int i = 0; i < size - 1; i++) {
     for (int j = i + 1; j < size; j++) {
       if (a[i] > a[j]) {
-        int temp = a[i];
+        float temp = a[i];
         a[i] = a[j];
         a[j] = temp;
       }
@@ -42,8 +49,7 @@ void sort(int a[], int size) {
   }
 }
 
-// Function to get a stable distance measurement by removing outliers
-int getStableDistance() {
+float getStableDistance(float& minOutlier, float& maxOutlier, float& minFiltered, float& maxFiltered) {
   for (int i = 0; i < numOutlierReadings; i++) {
     digitalWrite(trigPin, LOW);
     delayMicroseconds(2);
@@ -51,99 +57,70 @@ int getStableDistance() {
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     duration = pulseIn(echoPin, HIGH);
-
-    outlierReadings[i] = duration * 0.0343 / 2;
-    delay(10);
+    outlierReadings[i] = duration * 0.0343 / 2.0;
+    delay(60);
   }
-
   sort(outlierReadings, numOutlierReadings);
-
-  long sum = 0;
-  for (int i = 1; i < numOutlierReadings - 1; i++) {
+  minOutlier = outlierReadings[0];
+  maxOutlier = outlierReadings[numOutlierReadings - 1];
+  minFiltered = outlierReadings[numToTrim];
+  maxFiltered = outlierReadings[numOutlierReadings - numToTrim - 1];
+  float sum = 0.0;
+  for (int i = numToTrim; i < numOutlierReadings - numToTrim; i++) {
     sum += outlierReadings[i];
   }
-
-  return sum / (numOutlierReadings - 2);
+  return sum / (float)(numOutlierReadings - 2 * numToTrim);
 }
 
-// Function to calculate the moving average of a new measurement
-int getMovingAverage(int newMeasurement) {
-  static const int numReadings = 10;
-  static int readings[numReadings];
-  static int readingIndex = 0;
-  static long total = 0;
-
-  if (total == 0) {
-    for (int i = 0; i < numReadings; i++) {
-      readings[i] = newMeasurement;
-    }
-    total = (long)newMeasurement * numReadings;
-  }
-
+float getMovingAverage(float newMeasurement) {
   total = total - readings[readingIndex];
   readings[readingIndex] = newMeasurement;
   total = total + readings[readingIndex];
   readingIndex = (readingIndex + 1) % numReadings;
-
   return total / numReadings;
 }
 
-// Function to calculate useful level, volume, and percentage
-TankData calculateTankData(int filteredDistance) {
+TankData calculateTankData(float movingAverage) {
   TankData data;
-
-  float waterLevel = tankHeight - filteredDistance;
+  float waterLevel = tankHeight - movingAverage;
   float usefulLevel = waterLevel - minWaterDepth;
-
   if (usefulLevel < 0) {
-    usefulLevel = 0;
+    usefulLevel = 0.0;
   }
-
   data.usefulLevel = usefulLevel;
   data.volumeLiters = (volumePerCmCube * usefulLevel) / 1000.0;
-  data.usefulPercentage = (usefulLevel / maxUsefulHeight) * 100;
-
+  data.usefulPercentage = (usefulLevel / maxUsefulHeight) * 100.0;
   return data;
 }
 
 // --- Main Loop ---
-
 void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
-
   Serial.begin(9600);
+  for (int i = 0; i < numReadings; i++) {
+    readings[i] = 0.0;
+  }
 }
 
 void loop() {
   unsigned long currentMillis = millis();
-
-  // Check if 1000ms have passed since the last execution
   if (currentMillis - previousMillis >= interval) {
-    // Update the timer for the next loop
-    previousMillis = currentMillis;    
-    // 1. Get a stabilized raw measurement (outlier filter)
-    int stableMeasurement = getStableDistance();
-
-    // 2. Smooth the measurement with a moving average
-    int average = getMovingAverage(stableMeasurement);
-
-    // 3. Perform all tank-related calculations
+    previousMillis = currentMillis;
+    float minOutlier, maxOutlier, minFiltered, maxFiltered;
+    float outlierFilteredDistance = getStableDistance(minOutlier, maxOutlier, minFiltered, maxFiltered);
+    float average = getMovingAverage(outlierFilteredDistance);
     TankData tankData = calculateTankData(average);
-
-    // 4. Send the results to the serial port in a structured CSV format
-    Serial.print("Niveau utile: ");
-    Serial.print(tankData.usefulLevel);
-    Serial.print(" cm, ");
-
-    Serial.print("Volume: ");
-    Serial.print(tankData.volumeLiters);
-    Serial.print(" L, ");
-
-    Serial.print("Pourcentage: ");
-    Serial.print(tankData.usefulPercentage);
-    Serial.print(" %");
-
-    Serial.println(); // Add a new line at the end
+    StaticJsonDocument<200> doc;
+    doc["brut_filtre"] = outlierFilteredDistance;
+    doc["outliers_min"] = minOutlier;
+    doc["outliers_max"] = maxOutlier;
+    doc["filtrees_min"] = minFiltered;
+    doc["filtrees_max"] = maxFiltered;
+    doc["niveau_utile"] = tankData.usefulLevel;
+    doc["volume_litres"] = tankData.volumeLiters;
+    doc["pourcentage"] = tankData.usefulPercentage;
+    serializeJson(doc, Serial);
+    Serial.println();
   }
 }
