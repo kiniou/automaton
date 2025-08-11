@@ -5,7 +5,9 @@ const int trigPin = 13;
 const int echoPin = 12;
 
 // Global variables
-long duration;
+float duration;
+float soundSpeedCmPerUs = 0.0343; // Default speed of sound at 20°C
+float externalTemperature = 20.0; // Default external temperature
 
 // --- Structure to group tank data (simplified) ---
 struct TankData {
@@ -17,12 +19,12 @@ struct TankData {
 // --- Tank parameters ---
 const float tankHeight = 90.0;
 const float tankRadius = 40.0;
-const float minWaterDepth = 5.0;
+const float minWaterDepth = 10.0;
 const float maxUsefulHeight = tankHeight - minWaterDepth;
 const float volumePerCmCube = 3.14159 * tankRadius * tankRadius;
 
 // --- Outlier filter parameters ---
-const int numOutlierReadings = 9;
+const int numOutlierReadings = 15;
 const int numToTrim = 2;
 float outlierReadings[numOutlierReadings];
 
@@ -30,7 +32,6 @@ float outlierReadings[numOutlierReadings];
 const int numReadings = 10;
 float readings[numReadings];
 int readingIndex = 0;
-float total = 0.0;
 
 // --- Timing variables for precise one-second loop ---
 unsigned long previousMillis = 0;
@@ -49,6 +50,10 @@ void sort(float a[], int size) {
   }
 }
 
+void calculateSoundSpeed(float temp) {
+  soundSpeedCmPerUs = (331.3 + 0.606 * temp) / 10000.0;
+}
+
 float getStableDistance(float& minOutlier, float& maxOutlier, float& minFiltered, float& maxFiltered) {
   for (int i = 0; i < numOutlierReadings; i++) {
     digitalWrite(trigPin, LOW);
@@ -57,8 +62,8 @@ float getStableDistance(float& minOutlier, float& maxOutlier, float& minFiltered
     delayMicroseconds(10);
     digitalWrite(trigPin, LOW);
     duration = pulseIn(echoPin, HIGH);
-    outlierReadings[i] = duration * 0.0343 / 2.0;
-    delay(70);
+    outlierReadings[i] = (int)(duration * soundSpeedCmPerUs / 2.0 * 10.0) / 10.0;
+    delay(60);
   }
   sort(outlierReadings, numOutlierReadings);
   minOutlier = outlierReadings[0];
@@ -73,11 +78,14 @@ float getStableDistance(float& minOutlier, float& maxOutlier, float& minFiltered
 }
 
 float getMovingAverage(float newMeasurement) {
-  total = total - readings[readingIndex];
   readings[readingIndex] = newMeasurement;
-  total = total + readings[readingIndex];
   readingIndex = (readingIndex + 1) % numReadings;
-  return total / numReadings;
+
+  float sum = 0.0;
+  for (int i = 0; i < numReadings; i++) {
+    sum += readings[i];
+  }
+  return sum / numReadings;
 }
 
 TankData calculateTankData(float movingAverage) {
@@ -98,17 +106,22 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   Serial.begin(9600);
-
-  // Remplir le tableau avec une valeur initiale stable
-  float minOutlier, maxOutlier, minFiltered, maxFiltered;
-  float initialReading = getStableDistance(minOutlier, maxOutlier, minFiltered, maxFiltered);
   for (int i = 0; i < numReadings; i++) {
-    readings[i] = initialReading;
+    readings[i] = 0.0;
   }
 }
 
 void loop() {
   unsigned long currentMillis = millis();
+
+  // Check for incoming temperature data from Raspberry Pi
+  if (Serial.available() > 0) {
+    String tempString = Serial.readStringUntil('\n');
+    externalTemperature = tempString.toFloat();
+    // Le calcul de la vitesse du son se fait directement avec la température externe
+    calculateSoundSpeed(externalTemperature);
+  }
+
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
     float minOutlier, maxOutlier, minFiltered, maxFiltered;
@@ -116,15 +129,19 @@ void loop() {
     float average = getMovingAverage(outlierFilteredDistance);
     TankData tankData = calculateTankData(average);
     StaticJsonDocument<200> doc;
+
     doc["brut_filtre"] = outlierFilteredDistance;
     doc["outliers_min"] = minOutlier;
     doc["outliers_max"] = maxOutlier;
     doc["filtrees_min"] = minFiltered;
     doc["filtrees_max"] = maxFiltered;
+    doc["average"] = average;
+    doc["temperature"] = externalTemperature; // Affichage de la température externe
     doc["niveau_utile"] = tankData.usefulLevel;
     doc["volume_litres"] = tankData.volumeLiters;
     doc["pourcentage"] = tankData.usefulPercentage;
-    serializeJson(doc, Serial);
+
+    serializeJson(doc, Serial, 1);
     Serial.println();
   }
 }
