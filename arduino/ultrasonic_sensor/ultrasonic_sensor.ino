@@ -17,13 +17,13 @@ struct TankData {
 // --- Tank parameters ---
 const float tankHeight = 90.0;
 const float tankRadius = 40.0;
-const float minWaterDepth = 10.0;
+const float minWaterDepth = 5.0;
 const float maxUsefulHeight = tankHeight - minWaterDepth;
 const float volumePerCmCube = 3.14159 * tankRadius * tankRadius;
 
 // --- Outlier filter parameters ---
-const int numOutlierReadings = 30;
-const int numToTrim = 5;
+const int numOutlierReadings = 9;
+const int numToTrim = 2;
 float outlierReadings[numOutlierReadings];
 
 // --- Moving average variables ---
@@ -58,7 +58,7 @@ float getStableDistance(float& minOutlier, float& maxOutlier, float& minFiltered
     digitalWrite(trigPin, LOW);
     duration = pulseIn(echoPin, HIGH);
     outlierReadings[i] = duration * 0.0343 / 2.0;
-    delay(60);
+    delay(70);
   }
   sort(outlierReadings, numOutlierReadings);
   minOutlier = outlierReadings[0];
@@ -98,8 +98,12 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
   Serial.begin(9600);
+
+  // Remplir le tableau avec une valeur initiale stable
+  float minOutlier, maxOutlier, minFiltered, maxFiltered;
+  float initialReading = getStableDistance(minOutlier, maxOutlier, minFiltered, maxFiltered);
   for (int i = 0; i < numReadings; i++) {
-    readings[i] = 0.0;
+    readings[i] = initialReading;
   }
 }
 
