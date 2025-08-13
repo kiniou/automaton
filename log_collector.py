@@ -11,7 +11,7 @@ import serial_asyncio
 
 # Chemin de la base de données SQLite
 DB_PATH = "data.db"
-# Port série (adaptez si nécessaire)
+# Port série (adaptez si nécessaire, /dev/ttyACM0 est courant pour les Arduinos)
 SERIAL_PORT = '/dev/ttyACM0'
 # Vitesse de communication
 BAUDRATE = 9600
@@ -20,11 +20,9 @@ GPIO_INTERVAL_SECONDS = 3
 
 # --- Initialisation du capteur ---
 
-# Initialise le capteur DHT11. 
-# board.D4 correspond au pin GPIO 4. Changez si votre capteur est sur un autre pin.
-# Utilisez "use_pulseio=False" si vous exécutez le script en tant qu'utilisateur non-root.
+# CORRECTION : Utilisation du pin D18 pour le capteur DHT11.
 try:
-    dht_sensor = adafruit_dht.DHT11(board.D4, use_pulseio=False)
+    dht_sensor = adafruit_dht.DHT11(board.D18, use_pulseio=False)
 except NotImplementedError:
     print("La plateforme ne supporte pas 'pulseio', essayez d'exécuter en tant que root ou vérifiez la configuration.")
     dht_sensor = None
@@ -48,8 +46,8 @@ def setup_database():
 
 async def read_dht11(db_conn, serial_writer):
     """
-    Tâche asynchrone pour lire le capteur DHT11 toutes les 3 secondes,
-    stocker les données et envoyer la température sur le port série.
+    Tâche asynchrone pour lire le capteur DHT11, stocker les données
+    et envoyer la température sur le port série.
     """
     if not dht_sensor:
         print("Capteur DHT non initialisé. La tâche de lecture GPIO ne peut pas démarrer.")
@@ -57,14 +55,12 @@ async def read_dht11(db_conn, serial_writer):
 
     while True:
         try:
-            # Attend l'intervalle défini
             await asyncio.sleep(GPIO_INTERVAL_SECONDS)
             
             current_time = datetime.datetime.now()
             temperature = dht_sensor.temperature
             humidity = dht_sensor.humidity
 
-            # On ne traite que si on a une lecture valide
             if humidity is not None and temperature is not None:
                 gpio_data = {"temperature": round(temperature, 2), "humidity": round(humidity, 2)}
                 gpio_json_str = json.dumps(gpio_data)
@@ -76,15 +72,13 @@ async def read_dht11(db_conn, serial_writer):
                 db_conn.commit()
                 print(f"Log GPIO inséré : {gpio_json_str}")
 
-                # Envoie la température (sans label) sur le port série
                 if serial_writer:
                     temp_to_send = f"{temperature:.1f}\n".encode('utf-8')
                     serial_writer.write(temp_to_send)
-                    await serial_writer.drain() # Attend que le buffer soit vide
+                    await serial_writer.drain()
                     print(f"Température envoyée via Série : {temp_to_send.strip().decode()}")
 
         except RuntimeError as error:
-            # Les erreurs de lecture des DHT sont communes, on les ignore
             print(f"Erreur de lecture du DHT11: {error.args[0]}")
         except Exception as e:
             print(f"Erreur inattendue dans la tâche DHT11 : {e}")
@@ -96,7 +90,6 @@ async def read_serial(db_conn, serial_reader):
     """
     while True:
         try:
-            # Attend qu'une ligne complète soit reçue
             line_bytes = await serial_reader.readline()
             if not line_bytes:
                 continue
@@ -105,7 +98,6 @@ async def read_serial(db_conn, serial_reader):
             if line:
                 current_time = datetime.datetime.now()
                 try:
-                    # Valide que la ligne est bien un JSON
                     json.loads(line)
                     timestamp = current_time.isoformat()
                     cursor = db_conn.cursor()
@@ -118,31 +110,30 @@ async def read_serial(db_conn, serial_reader):
 
         except Exception as e:
             print(f"Erreur dans la tâche de lecture série : {e}")
-            await asyncio.sleep(1) # Évite une boucle infinie en cas d'erreur persistante
+            await asyncio.sleep(1)
 
 async def main():
     """Fonction principale qui configure et lance les tâches asynchrones."""
     setup_database()
-
-    # La connexion à la BDD est partagée entre les tâches
+    
     db_conn = sqlite3.connect(DB_PATH)
 
     try:
         print(f"Tentative de connexion au port série {SERIAL_PORT}...")
-        # Crée la connexion série asynchrone
+        
         reader, writer = await serial_asyncio.open_serial_connection(
-            url=SERIAL_PORT,
+            url=SERIAL_PORT, 
             baudrate=BAUDRATE
         )
+        
         print(f"Connecté ! Écoute sur {SERIAL_PORT} et lecture du capteur GPIO.")
 
-        # Lance les deux tâches en parallèle
         await asyncio.gather(
             read_dht11(db_conn, writer),
             read_serial(db_conn, reader)
         )
 
-    except serial.SerialException as e:
+    except serial.serialutil.SerialException as e:
         print(f"ERREUR : Impossible de se connecter au port série {SERIAL_PORT}. {e}")
         print("Vérifiez que le périphérique est bien connecté et que le nom du port est correct.")
     except Exception as e:
