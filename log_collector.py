@@ -22,7 +22,7 @@ GPIO_INTERVAL_SECONDS = 3
 
 # CORRECTION : Utilisation du pin D18 pour le capteur DHT11.
 try:
-    dht_sensor = adafruit_dht.DHT11(board.D18, use_pulseio=False)
+    dht_sensor = adafruit_dht.DHT11(board.D18)
 except NotImplementedError:
     print("La plateforme ne supporte pas 'pulseio', essayez d'exécuter en tant que root ou vérifiez la configuration.")
     dht_sensor = None
