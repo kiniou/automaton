@@ -136,12 +136,12 @@ void loop() {
     doc["filtrees_min"] = minFiltered;
     doc["filtrees_max"] = maxFiltered;
     doc["average"] = average;
-    doc["temperature"] = externalTemperature; // Affichage de la température externe
+    doc["temperature"] = externalTemperature;
     doc["niveau_utile"] = tankData.usefulLevel;
     doc["volume_litres"] = tankData.volumeLiters;
     doc["pourcentage"] = tankData.usefulPercentage;
 
-    serializeJson(doc, Serial, 1);
+    serializeJson(doc, Serial);
     Serial.println();
   }
 }
