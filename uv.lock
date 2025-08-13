@@ -394,6 +394,15 @@ wheels = [
 ]
 
 [[package]]
+name = "humanize"
+version = "4.12.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/d1/bbc4d251187a43f69844f7fd8941426549bbe4723e8ff0a7441796b0789f/humanize-4.12.3.tar.gz", hash = "sha256:8430be3a615106fdfceb0b2c1b41c4c98c6b0fc5cc59663a5539b111dd325fb0", size = 80514, upload-time = "2025-04-30T11:51:07.98Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/1e/62a2ec3104394a2975a2629eec89276ede9dbe717092f6966fcf963e1bf0/humanize-4.12.3-py3-none-any.whl", hash = "sha256:2cbf6370af06568fa6d2da77c86edb7886f3160ecd19ee1ffef07979efc597f6", size = 128487, upload-time = "2025-04-30T11:51:06.468Z" },
+]
+
+[[package]]
 name = "idna"
 version = "3.10"
 source = { registry = "https://pypi.org/simple" }
@@ -889,6 +898,7 @@ dependencies = [
     { name = "adafruit-circuitpython-dht" },
     { name = "apache-libcloud" },
     { name = "click" },
+    { name = "humanize" },
     { name = "miniupnpc" },
     { name = "plotext" },
     { name = "pyright" },
@@ -906,6 +916,7 @@ requires-dist = [
     { name = "adafruit-circuitpython-dht", specifier = ">=4.0.9" },
     { name = "apache-libcloud", specifier = ">=3.8.0" },
     { name = "click", specifier = ">=8.2.1" },
+    { name = "humanize", specifier = ">=4.12.3" },
     { name = "miniupnpc", specifier = ">=2.3.3" },
     { name = "plotext", specifier = ">=5.3.2" },
     { name = "pyright", specifier = ">=1.1.403" },

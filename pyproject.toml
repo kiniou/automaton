@@ -9,6 +9,7 @@ dependencies = [
     "adafruit-circuitpython-dht>=4.0.9",
     "apache-libcloud>=3.8.0",
     "click>=8.2.1",
+    "humanize>=4.12.3",
     "miniupnpc>=2.3.3",
     "plotext>=5.3.2",
     "pyright>=1.1.403",
