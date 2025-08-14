@@ -8,6 +8,7 @@ dependencies = [
     "adafruit-blinka>=8.62.0",
     "adafruit-circuitpython-dht>=4.0.9",
     "apache-libcloud>=3.8.0",
+    "black>=25.1.0",
     "click>=8.2.1",
     "humanize>=4.12.3",
     "miniupnpc>=2.3.3",
