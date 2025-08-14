@@ -12,6 +12,7 @@ from textual.screen import ModalScreen
 from textual.timer import Timer
 from textual.widgets import (
     Button,
+    Digits,
     Footer,
     Header,
     Input,
@@ -76,26 +77,25 @@ PLOT_CONFIG = [
 ]
 
 
-class Indicator(Static):
+class Indicator(Vertical):
     """Widget pour afficher une seule valeur mise en forme."""
 
     def __init__(self, label: str, unit: str, **kwargs: Any) -> None:
         super().__init__(**kwargs)
-        self.label = label
-        self.unit = unit
-        self.value: Optional[float] = None
+        self.label_text = f"{label} ({unit})"
+        self.digits = Digits("-.-")
+
+    def compose(self) -> ComposeResult:
+        """Compose the indicator widget."""
+        yield Static(self.label_text, classes="indicator-label")
+        yield self.digits
 
     def update_value(self, value: Optional[float]) -> None:
         """Met à jour la valeur affichée par l'indicateur."""
-        self.value = value
         if value is None:
-            display_value = "-.--"
+            self.digits.update("-.-")
         else:
-            display_value = f"{value:.1f}"
-
-        self.update(
-            f"[b]{self.label}[/b]\n[bold green]{display_value}[/] [dim]{self.unit}[/dim]"
-        )
+            self.digits.update(f"{value:.1f}")
 
 
 class RefreshDialog(ModalScreen[Optional[int]]):
